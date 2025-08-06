@@ -1,0 +1,33 @@
+version: "3.8"
+
+services:
+  # MCP Server
+  niagara-mcp:
+    build: .
+    container_name: niagara-mcp
+    environment:
+      - DEPLOYMENT_MODE=local
+      - NIAGARA_HOST=host.docker.internal # Use this for local Niagara on host
+      - NIAGARA_PORT=8080
+      - NIAGARA_USERNAME=${NIAGARA_USERNAME}
+      - NIAGARA_PASSWORD=${NIAGARA_PASSWORD}
+    volumes:
+      - ./logs:/app/logs
+    restart: unless-stopped
+    network_mode: host # Use host network for local Niagara access
+
+  # Optional: Relay API for remote access
+  relay-api:
+    build:
+      context: .
+      dockerfile: Dockerfile.relay
+    container_name: niagara-relay
+    ports:
+      - "8000:8000"
+    environment:
+      - NIAGARA_HOST=${NIAGARA_HOST}
+      - NIAGARA_PORT=${NIAGARA_PORT}
+      - NIAGARA_USERNAME=${NIAGARA_USERNAME}
+      - NIAGARA_PASSWORD=${NIAGARA_PASSWORD}
+      - API_TOKENS=${API_TOKENS}
+    restart: unless-stopped

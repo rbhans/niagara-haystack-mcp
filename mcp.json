@@ -1,0 +1,42 @@
+{
+  "name": "niagara-haystack-mcp",
+  "version": "1.0.0",
+  "description": "MCP server for Tridium Niagara Building Automation Systems via Haystack API",
+  "author": "Your Name",
+  "license": "MIT",
+  "main": "niagara_mcp.py",
+  "mcp": {
+    "tool_patterns": [
+      "get_connection_info",
+      "about",
+      "read_points",
+      "write_point",
+      "read_history",
+      "get_equipment",
+      "get_alarms",
+      "nav",
+      "watch_*",
+      "execute_custom_filter",
+      "batch_read"
+    ],
+    "resource_patterns": ["haystack_filters.json"]
+  },
+  "runtime": "python",
+  "requirements": ["fastmcp>=0.1.0", "httpx>=0.25.0", "pydantic>=2.0.0"],
+  "environment": {
+    "DEPLOYMENT_MODE": {
+      "description": "Deployment mode: local, relay, or hybrid",
+      "default": "local",
+      "required": false
+    },
+    "NIAGARA_HOST": {
+      "description": "Niagara host for local mode",
+      "default": "localhost",
+      "required": false
+    },
+    "RELAY_URL": {
+      "description": "Remote API gateway URL for relay mode",
+      "required": false
+    }
+  }
+}

@@ -1,0 +1,92 @@
+{
+  "comment": "Example configurations for different deployment scenarios",
+
+  "scenario_1_local": {
+    "description": "Direct local connection to Niagara",
+    "mcpServers": {
+      "niagara": {
+        "command": "python",
+        "args": ["/path/to/niagara_mcp.py"],
+        "env": {
+          "DEPLOYMENT_MODE": "local",
+          "NIAGARA_HOST": "192.168.1.100",
+          "NIAGARA_PORT": "8080",
+          "NIAGARA_USERNAME": "admin",
+          "NIAGARA_PASSWORD": "password123"
+        }
+      }
+    }
+  },
+
+  "scenario_2_github_hosted": {
+    "description": "Run directly from GitHub using uvx (Python)",
+    "mcpServers": {
+      "niagara": {
+        "command": "uvx",
+        "args": [
+          "--from",
+          "git+https://github.com/yourusername/niagara-mcp.git",
+          "niagara-mcp"
+        ],
+        "env": {
+          "DEPLOYMENT_MODE": "local",
+          "NIAGARA_HOST": "192.168.1.100",
+          "NIAGARA_PORT": "8080",
+          "NIAGARA_USERNAME": "admin",
+          "NIAGARA_PASSWORD": "password123"
+        }
+      }
+    }
+  },
+
+  "scenario_3_relay_mode": {
+    "description": "Connect through remote API gateway",
+    "mcpServers": {
+      "niagara": {
+        "command": "python",
+        "args": ["/path/to/niagara_mcp.py"],
+        "env": {
+          "DEPLOYMENT_MODE": "relay",
+          "RELAY_URL": "https://api.yourcompany.com/niagara",
+          "RELAY_TOKEN": "your-secure-api-token"
+        }
+      }
+    }
+  },
+
+  "scenario_4_hybrid_mode": {
+    "description": "Try local first, fallback to relay",
+    "mcpServers": {
+      "niagara": {
+        "command": "python",
+        "args": ["/path/to/niagara_mcp.py"],
+        "env": {
+          "DEPLOYMENT_MODE": "hybrid",
+          "NIAGARA_HOST": "192.168.1.100",
+          "NIAGARA_PORT": "8080",
+          "NIAGARA_USERNAME": "admin",
+          "NIAGARA_PASSWORD": "password123",
+          "RELAY_URL": "https://api.yourcompany.com/niagara",
+          "RELAY_TOKEN": "your-secure-api-token"
+        }
+      }
+    }
+  },
+
+  "scenario_5_docker": {
+    "description": "Run from Docker container",
+    "mcpServers": {
+      "niagara": {
+        "command": "docker",
+        "args": [
+          "run",
+          "--rm",
+          "-i",
+          "--env-file",
+          "/path/to/.env",
+          "yourusername/niagara-mcp:latest"
+        ]
+      }
+    }
+  }
+}
