@@ -19,7 +19,6 @@ logger = logging.getLogger(__name__)
 
 # Initialize FastMCP server
 mcp = FastMCP("Niagara Haystack MCP")
-mcp.add_prompt("niagara_help", "Get help with Niagara BAS operations and Haystack queries")
 
 class DeploymentMode(Enum):
     """Deployment mode for the MCP server"""
