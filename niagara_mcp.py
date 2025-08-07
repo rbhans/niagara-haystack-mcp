@@ -106,23 +106,43 @@ class HaystackClient:
     async def execute_op(self, op: str, params: Optional[Dict] = None) -> Dict:
         """Execute a Haystack operation"""
         try:
-            if self.config.mode == DeploymentMode.RELAY:
-                # Relay mode: wrap the operation
-                url = f"{self.base_url}/haystack"
-                payload = {
-                    "operation": op,
-                    "params": params or {}
-                }
+            # Build the URL
+            url = f"{self.base_url}/{op}"
+            
+            # Niagara Haystack typically expects text/zinc format
+            headers = {
+                "Accept": "application/json",  # We want JSON response
+            }
+            
+            if op == "about":
+                # About is typically a GET request
+                response = self.client.get(url, headers=headers)
+            elif op in ["read", "hisRead", "pointWrite", "watchSub", "watchPoll", "nav"]:
+                # These operations need parameters in Zinc format or as query params
+                # For simplicity, try query parameters first
+                response = self.client.get(url, params=params, headers=headers)
+                
+                # If GET fails, try POST with form data
+                if response.status_code == 405:  # Method not allowed
+                    headers["Content-Type"] = "application/x-www-form-urlencoded"
+                    response = self.client.post(url, data=params, headers=headers)
             else:
-                # Local mode: direct Haystack call
-                url = f"{self.base_url}/{op}"
-                payload = params or {}
+                # Default to GET with query parameters
+                response = self.client.get(url, params=params, headers=headers)
             
-            response = self.client.post(url, json=payload)
             response.raise_for_status()
-            return response.json()
             
-        except httpx.ConnectError as e:
+            # Parse response - could be JSON or Zinc format
+            content_type = response.headers.get("content-type", "")
+            if "json" in content_type:
+                return response.json()
+            else:
+                # If it's Zinc format, we'd need to parse it
+                # For now, return as text wrapped in dict
+                return {"response": response.text, "format": "zinc"}
+            
+        except httpx.HTTPStatusError as e:
+            logger.error(f"HTTP error {e.response.status_code}: {e.response.text}")
             if self.config.mode == DeploymentMode.HYBRID and self.config.relay_url:
                 # Fallback to relay mode
                 logger.info("Local connection failed, trying relay mode")
@@ -131,7 +151,6 @@ class HaystackClient:
                 self.client = self._create_client()
                 return await self.execute_op(op, params)
             else:
-                logger.error(f"Connection failed: {e}")
                 raise
         except Exception as e:
             logger.error(f"Haystack operation failed: {e}")
