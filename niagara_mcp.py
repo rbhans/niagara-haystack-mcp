@@ -12,6 +12,7 @@ import httpx
 from fastmcp import FastMCP
 from pydantic import BaseModel, Field
 import json
+import re
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -86,7 +87,10 @@ class HaystackClient:
     
     def _create_client(self) -> httpx.Client:
         """Create HTTP client with appropriate authentication"""
-        headers = {}
+        headers = {
+            "Accept": "application/json, text/zinc, text/plain",
+            "User-Agent": "Niagara-MCP/1.0"
+        }
         auth = None
         
         if self.config.mode == DeploymentMode.RELAY and self.config.relay_token:
@@ -103,57 +107,78 @@ class HaystackClient:
             verify=self.config.verify_ssl
         )
     
+    def parse_zinc_response(self, text: str) -> Dict:
+        """Parse Zinc format response to dictionary"""
+        lines = text.strip().split('\n')
+        if len(lines) < 2:
+            return {"error": "Invalid Zinc response"}
+        
+        # First line is version
+        version_line = lines[0]
+        
+        # Second line is column headers
+        headers = lines[1].split(',')
+        
+        # Parse data rows
+        rows = []
+        for line in lines[2:]:
+            if line.strip():
+                # Simple parsing - a full Zinc parser would be more complex
+                values = line.split(',')
+                row = {}
+                for i, header in enumerate(headers):
+                    if i < len(values):
+                        value = values[i].strip()
+                        # Remove backticks from URIs
+                        if value.startswith('`') and value.endswith('`'):
+                            value = value[1:-1]
+                        # Remove quotes from strings
+                        elif value.startswith('"') and value.endswith('"'):
+                            value = value[1:-1]
+                        row[header] = value
+                rows.append(row)
+        
+        return {
+            "version": version_line,
+            "cols": headers,
+            "rows": rows if rows else [dict(zip(headers, lines[2].split(',')))] if len(lines) > 2 else []
+        }
+    
     async def execute_op(self, op: str, params: Optional[Dict] = None) -> Dict:
         """Execute a Haystack operation"""
         try:
             # Build the URL
             url = f"{self.base_url}/{op}"
             
-            # Niagara Haystack typically expects text/zinc format
-            headers = {
-                "Accept": "application/json",  # We want JSON response
-            }
+            logger.info(f"Executing Haystack operation: {op} at {url}")
             
-            if op == "about":
-                # About is typically a GET request
-                response = self.client.get(url, headers=headers)
-            elif op in ["read", "hisRead", "pointWrite", "watchSub", "watchPoll", "nav"]:
-                # These operations need parameters in Zinc format or as query params
-                # For simplicity, try query parameters first
-                response = self.client.get(url, params=params, headers=headers)
-                
-                # If GET fails, try POST with form data
-                if response.status_code == 405:  # Method not allowed
-                    headers["Content-Type"] = "application/x-www-form-urlencoded"
-                    response = self.client.post(url, data=params, headers=headers)
+            # All nhaystack operations use GET requests
+            if params:
+                response = self.client.get(url, params=params)
             else:
-                # Default to GET with query parameters
-                response = self.client.get(url, params=params, headers=headers)
+                response = self.client.get(url)
+            
+            # Check for errors
+            if response.status_code == 415:
+                logger.error(f"415 error - the server expects a different format")
+                raise Exception(f"415 Unsupported Media Type")
             
             response.raise_for_status()
             
-            # Parse response - could be JSON or Zinc format
-            content_type = response.headers.get("content-type", "")
-            if "json" in content_type:
+            # Parse response based on content type
+            content_type = response.headers.get("content-type", "").lower()
+            
+            if "application/json" in content_type:
                 return response.json()
             else:
-                # If it's Zinc format, we'd need to parse it
-                # For now, return as text wrapped in dict
-                return {"response": response.text, "format": "zinc"}
+                # Assume Zinc format
+                return self.parse_zinc_response(response.text)
             
         except httpx.HTTPStatusError as e:
             logger.error(f"HTTP error {e.response.status_code}: {e.response.text}")
-            if self.config.mode == DeploymentMode.HYBRID and self.config.relay_url:
-                # Fallback to relay mode
-                logger.info("Local connection failed, trying relay mode")
-                self.config.mode = DeploymentMode.RELAY
-                self.base_url = self._get_base_url()
-                self.client = self._create_client()
-                return await self.execute_op(op, params)
-            else:
-                raise
+            raise
         except Exception as e:
-            logger.error(f"Haystack operation failed: {e}")
+            logger.error(f"Haystack operation '{op}' failed: {e}")
             raise
     
     def close(self):
