@@ -34,7 +34,7 @@ class NiagaraConfig(BaseModel):
     mode: DeploymentMode = Field(default=DeploymentMode.LOCAL, description="Deployment mode")
     relay_url: Optional[str] = Field(default=None, description="Remote relay API URL")
     relay_token: Optional[str] = Field(default=None, description="Authentication token for relay")
-
+    
     # Local Niagara settings
     host: str = Field(default="localhost", description="Niagara host address")
     port: int = Field(default=8080, description="Niagara port")
@@ -42,7 +42,7 @@ class NiagaraConfig(BaseModel):
     password: str = Field(default="", description="Niagara password")
     haystack_path: str = Field(default="/haystack", description="Haystack API endpoint path")
     use_https: bool = Field(default=False, description="Use HTTPS for connection")
-
+    
     # Connection settings
     timeout: int = Field(default=30, description="Request timeout in seconds")
     verify_ssl: bool = Field(default=True, description="Verify SSL certificates")
@@ -52,7 +52,7 @@ def load_config() -> NiagaraConfig:
     """Load configuration from environment variables"""
     mode_str = os.getenv("DEPLOYMENT_MODE", "local").lower()
     mode = DeploymentMode(mode_str) if mode_str in ["local", "relay", "hybrid"] else DeploymentMode.LOCAL
-
+    
     return NiagaraConfig(
         mode=mode,
         relay_url=os.getenv("RELAY_URL"),
@@ -71,12 +71,12 @@ config = load_config()
 
 class HaystackClient:
     """Client for interacting with Haystack API (local or remote)"""
-
+    
     def __init__(self, config: NiagaraConfig):
         self.config = config
         self.base_url = self._get_base_url()
         self.client = self._create_client()
-
+    
     def _get_base_url(self) -> str:
         """Get the appropriate base URL based on deployment mode"""
         if self.config.mode == DeploymentMode.RELAY and self.config.relay_url:
@@ -84,26 +84,26 @@ class HaystackClient:
         else:
             protocol = 'https' if self.config.use_https else 'http'
             return f"{protocol}://{self.config.host}:{self.config.port}{self.config.haystack_path}"
-
+    
     def _create_client(self) -> httpx.Client:
         """Create HTTP client with appropriate authentication"""
         headers = {}
         auth = None
-
+        
         if self.config.mode == DeploymentMode.RELAY and self.config.relay_token:
             # Use bearer token for relay authentication
             headers["Authorization"] = f"Bearer {self.config.relay_token}"
         elif self.config.username:
             # Use basic auth for direct connection
             auth = (self.config.username, self.config.password)
-
+        
         return httpx.Client(
             auth=auth,
             headers=headers,
             timeout=self.config.timeout,
             verify=self.config.verify_ssl
         )
-
+    
     async def execute_op(self, op: str, params: Optional[Dict] = None) -> Dict:
         """Execute a Haystack operation"""
         try:
@@ -118,11 +118,11 @@ class HaystackClient:
                 # Local mode: direct Haystack call
                 url = f"{self.base_url}/{op}"
                 payload = params or {}
-
+            
             response = self.client.post(url, json=payload)
             response.raise_for_status()
             return response.json()
-
+            
         except httpx.ConnectError as e:
             if self.config.mode == DeploymentMode.HYBRID and self.config.relay_url:
                 # Fallback to relay mode
@@ -137,7 +137,7 @@ class HaystackClient:
         except Exception as e:
             logger.error(f"Haystack operation failed: {e}")
             raise
-
+    
     def close(self):
         """Close the HTTP client"""
         self.client.close()
@@ -156,7 +156,7 @@ async def get_connection_info() -> Dict[str, str]:
     except Exception as e:
         status = f"error: {str(e)}"
         ops = []
-
+    
     return {
         "mode": config.mode.value,
         "endpoint": haystack.base_url,
@@ -194,10 +194,10 @@ async def read_points(
         params = {"filter": filter}
         if limit:
             params["limit"] = limit
-
+            
         result = await haystack.execute_op("read", params)
         rows = result.get("rows", [])
-
+        
         points = []
         for row in rows:
             point_data = {
@@ -208,7 +208,7 @@ async def read_points(
                 "tags": [k for k in row.keys() if k not in ["id", "dis", "curVal", "unit"]]
             }
             points.append(point_data)
-
+        
         return {
             "count": len(points),
             "filter": filter,
@@ -229,7 +229,7 @@ async def read_history(
             "range": range
         }
         result = await haystack.execute_op("hisRead", params)
-
+        
         rows = result.get("rows", [])
         history = []
         for row in rows:
@@ -239,7 +239,7 @@ async def read_history(
                 "ts": ts_val,
                 "val": row.get("val", "")
             })
-
+        
         return {
             "point_id": point_id,
             "range": range,
@@ -263,10 +263,10 @@ async def write_point(
             "level": level,
             "val": value
         }
-
+        
         if duration:
             params["duration"] = f"{duration}min"
-
+        
         result = await haystack.execute_op("pointWrite", params)
         return {
             "success": True,
@@ -291,7 +291,7 @@ async def watch_subscribe(
         }
         result = await haystack.execute_op("watchSub", params)
         watch_id = result.get("watchId", "")
-
+        
         return {
             "watch_id": watch_id,
             "filter": filter,
@@ -309,7 +309,7 @@ async def watch_poll(
     try:
         params = {"watchId": watch_id}
         result = await haystack.execute_op("watchPoll", params)
-
+        
         rows = result.get("rows", [])
         updates = []
         for row in rows:
@@ -320,7 +320,7 @@ async def watch_poll(
                 "curVal": row.get("curVal", ""),
                 "curStatus": row.get("curStatus", "")
             })
-
+        
         return {
             "watch_id": watch_id,
             "updates": updates,
@@ -338,10 +338,10 @@ async def nav(
         params = {}
         if nav_id:
             params["navId"] = nav_id
-
+        
         result = await haystack.execute_op("nav", params)
         rows = result.get("rows", [])
-
+        
         items = []
         for row in rows:
             items.append({
@@ -349,7 +349,7 @@ async def nav(
                 "dis": row.get("dis", ""),
                 "tags": [k for k in row.keys() if k not in ["navId", "dis"]]
             })
-
+        
         return {
             "current_nav_id": nav_id or "root",
             "items": items,
@@ -368,10 +368,10 @@ async def get_alarms(
         # Adjust filter based on include_acked
         if not include_acked:
             filter = f"{filter} and not acked"
-
+        
         result = await haystack.execute_op("read", {"filter": filter})
         rows = result.get("rows", [])
-
+        
         alarms = []
         for row in rows:
             id_val = row.get("id", {})
@@ -387,10 +387,10 @@ async def get_alarms(
                 "equipment": row.get("equipRef", "")
             }
             alarms.append(alarm_data)
-
+        
         # Sort by priority and ack status
         alarms.sort(key=lambda x: (x["acked"], x.get("priority", 999)))
-
+        
         return {
             "count": len(alarms),
             "active_count": sum(1 for a in alarms if not a["acked"]),
@@ -409,25 +409,25 @@ async def get_equipment(
         # Read equipment
         result = await haystack.execute_op("read", {"filter": filter})
         equipment_rows = result.get("rows", [])
-
+        
         equipment_list = []
         for equip in equipment_rows:
             id_val = equip.get("id", {})
             equip_id = id_val.get("_val", "") if isinstance(id_val, dict) else id_val
-
+            
             equipment_data = {
                 "id": equip_id,
                 "dis": equip.get("dis", ""),
                 "siteRef": equip.get("siteRef", ""),
                 "tags": [k for k in equip.keys() if k not in ["id", "dis", "siteRef"]]
             }
-
+            
             # Get points for this equipment if requested
             if include_points and equip_id:
                 point_filter = f'point and equipRef==@{equip_id}'
                 points_result = await haystack.execute_op("read", {"filter": point_filter, "limit": 10})
                 points = points_result.get("rows", [])
-
+                
                 equipment_data["point_count"] = len(points)
                 equipment_data["points"] = [
                     {
@@ -436,9 +436,9 @@ async def get_equipment(
                         "curVal": p.get("curVal", "")
                     } for p in points[:5]  # First 5 points as preview
                 ]
-
+            
             equipment_list.append(equipment_data)
-
+        
         return {
             "count": len(equipment_list),
             "equipment": equipment_list
@@ -459,7 +459,7 @@ async def execute_custom_filter(
         }
         result = await haystack.execute_op("read", params)
         rows = result.get("rows", [])
-
+        
         return {
             "filter": filter,
             "count": len(rows),
@@ -476,14 +476,14 @@ async def batch_read(
     try:
         if not point_ids:
             return {"error": "No point IDs provided"}
-
+        
         # Create filter for multiple IDs
         id_filters = [f'id==@{pid}' for pid in point_ids]
         filter_str = " or ".join(id_filters)
-
+        
         result = await haystack.execute_op("read", {"filter": filter_str})
         rows = result.get("rows", [])
-
+        
         points = {}
         for row in rows:
             id_val = row.get("id", {})
@@ -494,7 +494,7 @@ async def batch_read(
                 "unit": row.get("unit", ""),
                 "curStatus": row.get("curStatus", "ok")
             }
-
+        
         return {
             "requested": len(point_ids),
             "found": len(points),
@@ -547,7 +547,7 @@ async def get_common_filters() -> str:
             "schedule_setpoints": "point and sp and scheduled"
         }
     }
-
+    
     return json.dumps(filters, indent=2)
 
 # Cleanup on shutdown
@@ -556,16 +556,17 @@ def cleanup():
     haystack.close()
     logger.info("MCP server shutdown complete")
 
-if __name__ == "__main__":
+def main():
+    """Main entry point for the MCP server"""
     import sys
-
+    
     # Print startup info
     logger.info(f"Starting Niagara MCP Server in {config.mode.value} mode")
     if config.mode in [DeploymentMode.RELAY, DeploymentMode.HYBRID]:
         logger.info(f"Relay URL: {config.relay_url}")
     else:
         logger.info(f"Direct connection to: {config.host}:{config.port}")
-
+    
     try:
         # Run the FastMCP server
         mcp.run()
@@ -576,3 +577,6 @@ if __name__ == "__main__":
         logger.error(f"Server error: {e}")
         cleanup()
         sys.exit(1)
+
+if __name__ == "__main__":
+    main()
